@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.memohnsen.travel-tracker"
+      "bundleIdentifier": "com.memohnsen.traveltracker"
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +20,9 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.memohnsen.traveltracker",
+      "googleMaps.apiKey": "AIzaSyBUWBurxEmzgbZ4zBoEhELaOQcu0uDGZOk",
     },
     "web": {
       "output": "static",
@@ -45,6 +47,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "56f8526d-9a4a-4c98-80c1-17924fa96bc6"
+      }
     }
   }
 }

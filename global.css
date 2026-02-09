@@ -7,8 +7,12 @@
 @layer theme {
   @variant light {
     --color-background: #FFFFFF;
+    --color-secondary: #FFFFFF;
+    --color-text-primary: #000000;
   }
   @variant dark {
     --color-background: #000000;
+    --color-secondary: #1C1C1E;
+    --color-text-primary: #FFFFFF;
   }
 }
