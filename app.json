@@ -22,7 +22,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.memohnsen.traveltracker",
-      "googleMaps.apiKey": "AIzaSyBUWBurxEmzgbZ4zBoEhELaOQcu0uDGZOk",
+      "googleMaps.apiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
     },
     "web": {
       "output": "static",
