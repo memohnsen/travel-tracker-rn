@@ -52,7 +52,10 @@ export default function Index() {
             >
               {
                 (progress: number) => (
-                  <Text className="text-text-primary text-xs">{Math.round(progress).toFixed(0)}%</Text>
+                  <Text className="text-text-primary text-xs">
+{Math.round(progress).toFixed(0)}
+%
+</Text>
                 )
               }
             </AnimatedCircularProgress>
@@ -104,7 +107,10 @@ export default function Index() {
             >
               {
                 (progress: number) => (
-                  <Text className="text-white text-xs">{Math.round(progress).toFixed(0)}%</Text>
+                  <Text className="text-white text-xs">
+{Math.round(progress).toFixed(0)}
+%
+</Text>
                 )
               }
             </AnimatedCircularProgress>
