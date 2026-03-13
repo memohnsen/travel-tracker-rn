@@ -1,41 +1,103 @@
+import { StatesDetails } from '@/components/StatesDetails';
 import { states } from '@/utils/states';
 import { BlurView } from 'expo-blur';
 import { GlassView } from 'expo-glass-effect';
 import { AppleMaps, GoogleMaps } from 'expo-maps';
 import { AppleMapsCircle } from 'expo-maps/build/apple/AppleMaps.types';
-import { useState } from 'react';
-import { Platform, Text, View } from "react-native";
-import { AnimatedCircularProgress } from 'react-native-circular-progress';
+import { useCallback, useState } from 'react';
+import { Platform } from "react-native";
+import { createMMKV } from 'react-native-mmkv';
+import {
+  interpolateColor,
+  runOnJS,
+  useAnimatedReaction,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
+
+export const storage = createMMKV()
+
+const COLOR_VISITED = '#00E676';
+const COLOR_UNVISITED = '#FF1744';
+const ANIMATION_DURATION_MS = 300;
+
+/* Returns the fill color for a circle. If this circle is currently animating, interpolates between start and end color. */
+function getCircleColor(
+  stateId: string,
+  isVisited: boolean,
+  animatingStateId: string | null,
+  animatingProgress: number,
+  animatingFromVisited: boolean
+): string {
+  if (animatingStateId !== stateId) {
+    return isVisited ? COLOR_VISITED : COLOR_UNVISITED;
+  }
+  return interpolateColor(
+    /* progress 0 = start color, 1 = end color */
+    animatingProgress,
+    [0, 1],
+    [
+      animatingFromVisited ? COLOR_VISITED : COLOR_UNVISITED,
+      animatingFromVisited ? COLOR_UNVISITED : COLOR_VISITED,
+    ]
+  );
+}
 
 export default function Index() {
-  const [visitedStates, setVisitedStates] = useState<String[]>([])
+  const [visitedStates, setVisitedStates] = useState<String[]>([]);
+  const [animatingStateId, setAnimatingStateId] = useState<string | null>(null);
+  const [animatingProgress, setAnimatingProgress] = useState(0);
+  const [animatingFromVisited, setAnimatingFromVisited] = useState(false);
+
+  const progressSv = useSharedValue(0);
+
+  useAnimatedReaction(
+    /* Whenever progressSv changes (every frame during the animation), copy it to React state so the map re-renders with the new color. 
+    runOnJS is required because setState must run on the JS thread. */
+    () => progressSv.value,
+    (value) => {
+      runOnJS(setAnimatingProgress)(value);
+    }
+  );
+
+  const finalizeAnimation = useCallback((stateId: string, wasVisited: boolean) => {
+    setVisitedStates((prev) =>
+      wasVisited ? prev.filter((id) => id !== stateId) : [...prev, stateId]
+    );
+    setAnimatingStateId(null);
+  }, []);
 
   const cameraPosition = {
     coordinates: {
       latitude: 39.833,
       longitude: -98.583,
     },
-    zoom: 4
+    zoom: Platform.OS === 'ios' ? 3.7 : 4.5
   }
 
-  const markAsVisited = (tappedCircle: AppleMapsCircle) => {
-    const stateId = tappedCircle.id
+  const markAsVisited = useCallback((tappedCircle: AppleMapsCircle) => {
+    const stateId = tappedCircle.id;
 
-    if (!stateId) {
-      return
+    if (!stateId || animatingStateId !== null) {
+      return;
     }
 
-    if (visitedStates.includes(stateId)) {
-      setVisitedStates(prevItems => 
-        prevItems.filter(item =>
-          item !== stateId
-        )
-      )
-    } else  {
-      setVisitedStates(prevItems => [...prevItems, stateId])
-    }
-  }
+    const isVisited = visitedStates.includes(stateId);
+    /* Record which circle is animating and direction; animate progressSv 0->1; when done, finalizeAnimation updates visitedStates. */
+    setAnimatingStateId(stateId);
+    setAnimatingFromVisited(isVisited);
+    progressSv.value = 0;
+    progressSv.value = withTiming(
+      1,
+      { duration: ANIMATION_DURATION_MS },
+      (finished) => {
+        if (finished) {
+          runOnJS(finalizeAnimation)(stateId, isVisited);
+        }
+      }
+    );
+  }, [visitedStates, animatingStateId, progressSv, finalizeAnimation]);
 
   if (Platform.OS === 'ios') {
     // IOS VIEW
@@ -45,27 +107,32 @@ export default function Index() {
           style={{ flex: 1 }} 
           cameraPosition={cameraPosition}
           uiSettings={{
-            myLocationButtonEnabled: false
+            myLocationButtonEnabled: false,
+            togglePitchEnabled: false,
           }}
           properties={{
             isTrafficEnabled: false,
             selectionEnabled: false,
-            isMyLocationEnabled: false
+            isMyLocationEnabled: false,
           }}  
           onCircleClick={(e) => {
             markAsVisited(e)
           }}
           circles={
-            states.map((state) => {
-              return {
-                id: state.id,
-                center: { latitude: state.latitude, longitude: state.longitude },
-                radius: 60_000,
-                color: visitedStates.includes(state.id) ? "green" : "red",
-                lineColor: "black",
-                lineWidth: 1,
-              };
-            })
+            states.map((state) => ({
+              id: state.id,
+              center: { latitude: state.latitude, longitude: state.longitude },
+              radius: 60_000,
+              color: getCircleColor(
+                state.id,
+                visitedStates.includes(state.id),
+                animatingStateId,
+                animatingProgress,
+                animatingFromVisited
+              ),
+              lineColor: "black",
+              lineWidth: 1,
+            }))
           }
         />
         <GlassView
@@ -79,7 +146,7 @@ export default function Index() {
             alignSelf: 'center',
           }}
         >
-          <StatesDetails />
+          <StatesDetails visitedStates={visitedStates.map(state => state.toString())} />
         </GlassView>
       </>
     )
@@ -91,11 +158,37 @@ export default function Index() {
           style={{ flex: 1 }} 
           cameraPosition={cameraPosition}
           uiSettings={{
-            myLocationButtonEnabled: false
+            myLocationButtonEnabled: false,
+            togglePitchEnabled: false,
           }}
+          properties={{
+            isTrafficEnabled: false,
+            selectionEnabled: false,
+            isMyLocationEnabled: false,
+            isBuildingEnabled: false,
+          }}  
+          onCircleClick={(e) => {
+            markAsVisited(e)
+          }}
+          circles={
+            states.map((state) => ({
+              id: state.id,
+              center: { latitude: state.latitude, longitude: state.longitude },
+              radius: 60_000,
+              color: getCircleColor(
+                state.id,
+                visitedStates.includes(state.id),
+                animatingStateId,
+                animatingProgress,
+                animatingFromVisited
+              ),
+              lineColor: "black",
+              lineWidth: 1,
+            }))
+          }
         />
         <BlurView
-          intensity={100}
+          intensity={130}
           tint="dark"
           style={{
             position: 'absolute',
@@ -105,58 +198,12 @@ export default function Index() {
             height: 104,
             width: '91.666%',
             alignSelf: 'center',
+            overflow: 'hidden'
           }}
         >
-          <StatesDetails />
+          <StatesDetails visitedStates={visitedStates.map(state => state.toString())} />
         </BlurView>
       </>
     )
   }
-}
-
-// SHARED DETAIL SECTION
-
-function StatesDetails() {
-  const progress: number = 50
-
-  const visitedStatesCount = (): String => {
-    let count = 0
-    states.forEach(state => {
-      if (state.visited === true) {
-        count ++
-      }
-    });
-    return `${count} of 50 States Visited`
-  }
-
-  return(
-    <>
-      <View className='flex-row justify-between'>
-          <View className='flex gap-2'>
-            <Text className='text-text-primary font-bold'>Progress</Text>
-            <Text className='text-gray-400'>{visitedStatesCount()}</Text>
-          </View>
-          <AnimatedCircularProgress
-            size={48}
-            width={4}
-            fill={progress}
-            tintColor="green"
-            backgroundColor="#3d5875"
-            rotation={360}
-          >
-            {
-              (progress: number) => (
-                <Text className="text-text-primary text-xs">{Math.round(progress).toFixed(0)}%</Text>
-              )
-            }
-          </AnimatedCircularProgress>
-        </View>
-        <View className='flex-row justify-center items-center content-center mt-2'>
-            <View className='rounded bg-green-500 size-2 mr-1 mt-0.5' />
-            <Text className='text-gray-400 text-xs mr-4'>Visited</Text>
-            <View className='rounded bg-red-500 size-2 mr-1 mt-0.5' />
-            <Text className='text-gray-400 text-xs'>Not Visited</Text>
-        </View>
-    </>
-  )
 }

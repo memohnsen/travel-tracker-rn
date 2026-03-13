@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router'
+import { Platform } from 'react-native'
 
 const Layout = () => {
   return (
@@ -6,7 +7,7 @@ const Layout = () => {
         <Stack.Screen
           name="index"
           options={{
-            headerTransparent: true,
+            headerTransparent: Platform.OS === 'ios' ? true : false,
             headerLargeTitle: true,
             headerShown: true,
             title: "States",
